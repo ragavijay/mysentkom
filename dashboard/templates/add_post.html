@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Add Post{% endblock %}
+{% block content %}
+<div class="container">
+    <h1 class="page-title">Add New Post</h1>
+    <div class="card">
+        <form method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="clusterid">Cluster</label>
+                <select id="clusterid" name="clusterid" required>
+                    <option value="">Select a cluster</option>
+                    {% for cluster in clusters %}
+                    <option value="{{ cluster.clusterid }}">{{ cluster.clustername }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="postlink">Post Link</label>
+                <input type="url" id="postlink" name="postlink" required placeholder="https://example.com/post">
+            </div>
+            <div class="form-group">
+                <label for="postmessage">Post Message</label>
+                <textarea id="postmessage" name="postmessage" required placeholder="Enter post message..."></textarea>
+            </div>
+            <div style="display: flex; gap: 1rem;">
+                <button type="submit" class="btn btn-success">Save Post</button>
+                <a href="{% url 'manage_posts' %}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

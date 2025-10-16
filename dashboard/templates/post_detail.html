@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Post Detail - Sentiment Analysis{% endblock %}
+{% block content %}
+<div class="container">
+    <h1 class="page-title">Post Sentiment Detail</h1>
+    <div class="card" style="margin-bottom: 2rem;">
+        <h3>Post #{{ post.postid }}</h3>
+        <p><strong>Cluster:</strong> {{ post.clusterid.clustername }}</p>
+        <p><strong>Message:</strong> {{ post.postmessage }}</p>
+        <p><strong>Link:</strong> <a href="{{ post.postlink }}" target="_blank" style="color: #667eea;">{{ post.postlink }}</a></p>
+        <p><strong>Total Responses:</strong> {{ total_responses }}</p>
+    </div>
+    <div class="chart-container">
+        {{ sentiment_chart|safe }}
+    </div>
+    
+    <div class="card" style="margin-top: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3>User Responses</h3>
+            <form method="GET" style="display: flex; gap: 0.5rem;">
+                <select name="sentiment" onchange="this.form.submit()" style="padding: 0.5rem; border: 1px solid #ddd; border-radius: 5px;">
+                    <option value="">All Sentiments</option>
+                    <option value="P" {% if sentiment_filter == 'P' %}selected{% endif %}>Positive</option>
+                    <option value="N" {% if sentiment_filter == 'N' %}selected{% endif %}>Negative</option>
+                    <option value="U" {% if sentiment_filter == 'U' %}selected{% endif %}>Neutral</option>
+                </select>
+            </form>
+        </div>
+        
+        <div style="max-height: 600px; overflow-y: auto;">
+            {% for response in responses %}
+            <div style="border-left: 4px solid; {% if response.sentiment == 'P' %}#2ecc71{% elif response.sentiment == 'N' %}#e74c3c{% else %}#95a5a6{% endif %}; background: #f8f9fa; padding: 1rem; margin-bottom: 1rem; border-radius: 5px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                    <div>
+                        <strong style="color: #2c3e50;">{{ response.username }}</strong>
+                        <span style="margin-left: 1rem; color: #7f8c8d; font-size: 0.85rem;">
+                            {% if response.agegroupid %}{{ response.agegroupid.agegroup }}{% endif %} | 
+                            {% if response.gender == 'M' %}Male{% elif response.gender == 'F' %}Female{% else %}Other{% endif %} | 
+                            {{ response.location }}
+                        </span>
+                    </div>
+                    <span style="padding: 0.25rem 0.75rem; border-radius: 15px; font-size: 0.85rem; font-weight: bold; 
+                        {% if response.sentiment == 'P' %}background: #d4edda; color: #155724;
+                        {% elif response.sentiment == 'N' %}background: #f8d7da; color: #721c24;
+                        {% else %}background: #e2e3e5; color: #383d41;{% endif %}">
+                        {% if response.sentiment == 'P' %}Positive
+                        {% elif response.sentiment == 'N' %}Negative
+                        {% else %}Neutral{% endif %}
+                    </span>
+                </div>
+                <p style="color: #333; margin: 0; line-height: 1.6;">{{ response.responsemessage }}</p>
+            </div>
+            {% empty %}
+            <p style="text-align: center; color: #7f8c8d; padding: 2rem;">No responses found.</p>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <div style="margin-top: 1.5rem;">
+        <a href="{% url 'sentiment_analysis' %}" class="btn btn-secondary">Back to Sentiment Analysis</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Sentiment Analysis{% endblock %}
+{% block content %}
+<div class="main-container">
+    <h1 class="page-title">Sentiment Analysis</h1>
+    
+    <div class="card-custom mb-4">
+        <form method="GET">
+            <div class="row align-items-end">
+                <div class="col-md-12">
+                    <label for="post" class="form-label">Select Post to Analyze:</label>
+                    <select name="post" id="post" class="form-select" onchange="this.form.submit()" required>
+                        <option value="">-- Select a Post --</option>
+                        {% for post in posts %}
+                        <option value="{{ post.postid }}" {% if post.postid|stringformat:"s" == selected_post_id %}selected{% endif %}>
+                            #{{ post.postid }} - {{ post.clusterid.clustername }} - {{ post.postmessage|truncatewords:10 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if selected_post %}
+    <div class="card-custom mb-4">
+        <h3 class="text-primary mb-3">Selected Post Details</h3>
+        <p><strong>Post ID:</strong> #{{ selected_post.postid }}</p>
+        <p><strong>Cluster:</strong> <span class="badge bg-info">{{ selected_post.clusterid.clustername }}</span></p>
+        <p><strong>Message:</strong> {{ selected_post.postmessage }}</p>
+        <p><strong>Link:</strong> <a href="{{ selected_post.postlink }}" target="_blank" class="text-primary">{{ selected_post.postlink }}</a></p>
+        <p><strong>Total Responses:</strong> <span id="total-responses">{{ total_responses }}</span></p>
+    </div>
+
+    <!-- Power BI Style Slicers -->
+    <div class="slicers-container">
+        <h4 class="mb-4">📊 Filter Sentiment Data</h4>
+        
+        <div class="row">
+            <!-- Gender Slicer -->
+            <div class="col-md-4">
+                <div class="slicer-group">
+                    <label class="slicer-title" for="genderSelect">Gender</label>
+                    <select id="genderSelect" class="slicer-select {% if gender_filter %}filtered{% endif %}" 
+                            onchange="applyFilter('gender', this.value)">
+                        <option value="">All</option>
+                        {% for gender in genders %}
+                        <option value="{{ gender }}" {% if gender_filter == gender %}selected{% endif %}>
+                            {% if gender == 'M' %}Male
+                            {% elif gender == 'F' %}Female
+                            {% else %}Other{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Age Group Slicer -->
+            <div class="col-md-4">
+                <div class="slicer-group">
+                    <label class="slicer-title" for="ageSelect">Age Group</label>
+                    <select id="ageSelect" class="slicer-select {% if agegroup_filter %}filtered{% endif %}" 
+                            onchange="applyFilter('agegroup', this.value)">
+                        <option value="">All</option>
+                        {% for age in age_groups %}
+                        <option value="{{ age.agegroupid }}" {% if agegroup_filter == age.agegroupid|stringformat:"s" %}selected{% endif %}>
+                            {{ age.agegroup }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Location Slicer -->
+            <div class="col-md-4">
+                <div class="slicer-group">
+                    <label class="slicer-title" for="locationSelect">Location</label>
+                    <select id="locationSelect" class="slicer-select {% if location_filter %}filtered{% endif %}" 
+                            onchange="applyFilter('location', this.value)">
+                        <option value="">All</option>
+                        {% for location in locations %}
+                        <option value="{{ location }}" {% if location_filter == location %}selected{% endif %}>
+                            {{ location }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Filters & Clear Button -->
+        {% if gender_filter or agegroup_filter or location_filter %}
+        <div class="active-filters">
+            <strong>Active Filters:</strong>
+            {% if gender_filter %}
+            <span class="filter-badge">
+                Gender: {% if gender_filter == 'M' %}Male{% elif gender_filter == 'F' %}Female{% else %}Other{% endif %}
+            </span>
+            {% endif %}
+            {% if agegroup_filter %}
+            <span class="filter-badge">
+                Age: {% for age in age_groups %}{% if age.agegroupid|stringformat:"s" == agegroup_filter %}{{ age.agegroup }}{% endif %}{% endfor %}
+            </span>
+            {% endif %}
+            {% if location_filter %}
+            <span class="filter-badge">Location: {{ location_filter }}</span>
+            {% endif %}
+            <button type="button" class="btn btn-sm clear-filters-btn" onclick="clearAllFilters()">Clear All Filters</button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Sentiment Pie Chart -->
+    <div class="chart-container" id="chartContainer">
+        {{ sentiment_chart|safe }}
+    </div>
+
+    <!-- User Responses -->
+    <div class="card-custom">
+        <h3 class="mb-4">User Responses (<span id="response-count">{{ total_responses }}</span> total)</h3>
+        <div id="responses-container">
+            {% include 'responses_list.html' %}
+        </div>
+    </div>
+
+    {% else %}
+    <div class="card-custom text-center py-5">
+        <h3 class="text-primary mb-3">📊 Select a Post to Begin Analysis</h3>
+        <p class="text-muted fs-5">Choose a post from the dropdown above to view detailed sentiment analysis.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const postId = '{{ selected_post_id }}';
+let currentFilters = {
+    gender: '{{ gender_filter }}',
+    agegroup: '{{ agegroup_filter }}',
+    location: '{{ location_filter }}'
+};
+
+function applyFilter(filterType, value) {
+    currentFilters[filterType] = value;
+    updateChart();
+}
+
+function clearAllFilters() {
+    currentFilters = { gender: '', agegroup: '', location: '' };
+    // Reset all dropdowns to "All"
+    document.getElementById('genderSelect').value = '';
+    document.getElementById('ageSelect').value = '';
+    document.getElementById('locationSelect').value = '';
+    updateChart();
+}
+
+function updateChart() {
+    const chartContainer = document.getElementById('chartContainer');
+    const responsesContainer = document.getElementById('responses-container');
+    
+    // Show loading
+    chartContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Updating chart...</p></div>';
+    responsesContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading responses...</p></div>';
+    
+    // Build URL with filters
+    const params = new URLSearchParams({
+        post: postId,
+        gender: currentFilters.gender,
+        agegroup: currentFilters.agegroup,
+        location: currentFilters.location
+    });
+    
+    // Fetch updated chart
+    fetch(`?${params.toString()}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        // Insert the chart HTML
+        chartContainer.innerHTML = data.sentiment_chart;
+        
+        // Update response counts
+        document.getElementById('total-responses').textContent = data.total_responses;
+        document.getElementById('response-count').textContent = data.total_responses;
+        
+        // Find and execute the plotly script in the returned HTML
+        const scriptMatch = data.sentiment_chart.match(/<script[^>]*>([\s\S]*?)<\/script>/);
+        if (scriptMatch && scriptMatch[1]) {
+            try {
+                eval(scriptMatch[1]);
+            } catch (e) {
+                console.error('Error executing Plotly script:', e);
+            }
+        }
+        
+        // Update URL without reload
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.pushState({}, '', newUrl);
+        
+        // Update dropdown styling
+        updateDropdownStyling();
+        
+        // Load first page of responses
+        loadPageWithoutScroll(1);
+    })
+    .catch(error => {
+        chartContainer.innerHTML = '<p class="text-danger text-center">Error updating chart. Please try again.</p>';
+        console.error('Error:', error);
+    });
+}
+
+function updateDropdownStyling() {
+    // Add/remove 'filtered' class based on selection
+    const genderSelect = document.getElementById('genderSelect');
+    const ageSelect = document.getElementById('ageSelect');
+    const locationSelect = document.getElementById('locationSelect');
+    
+    if (genderSelect) genderSelect.classList.toggle('filtered', genderSelect.value !== '');
+    if (ageSelect) ageSelect.classList.toggle('filtered', ageSelect.value !== '');
+    if (locationSelect) locationSelect.classList.toggle('filtered', locationSelect.value !== '');
+}
+
+function loadPageWithoutScroll(pageNum) {
+    const container = document.getElementById('responses-container');
+    
+    const params = new URLSearchParams({
+        post: postId,
+        gender: currentFilters.gender,
+        agegroup: currentFilters.agegroup,
+        location: currentFilters.location,
+        page: pageNum
+    });
+    
+    fetch(`?${params.toString()}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        container.innerHTML = data.html;
+        attachPaginationListeners();
+    })
+    .catch(error => {
+        container.innerHTML = '<p class="text-danger text-center">Error loading responses. Please try again.</p>';
+        console.error('Error:', error);
+    });
+}
+
+function loadPage(pageNum) {
+    const container = document.getElementById('responses-container');
+    
+    container.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading responses...</p></div>';
+    container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    
+    const params = new URLSearchParams({
+        post: postId,
+        gender: currentFilters.gender,
+        agegroup: currentFilters.agegroup,
+        location: currentFilters.location,
+        page: pageNum
+    });
+    
+    fetch(`?${params.toString()}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        container.innerHTML = data.html;
+        attachPaginationListeners();
+    })
+    .catch(error => {
+        container.innerHTML = '<p class="text-danger text-center">Error loading responses. Please try again.</p>';
+        console.error('Error:', error);
+    });
+}
+
+function attachPaginationListeners() {
+    document.querySelectorAll('.page-link-custom:not(.disabled)').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const page = this.getAttribute('data-page');
+            if (page) loadPage(page);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    attachPaginationListeners();
+    updateDropdownStyling();
+});
+</script>
+{% endblock %}

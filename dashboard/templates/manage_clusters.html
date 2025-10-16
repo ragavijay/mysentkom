@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Manage Clusters{% endblock %}
+{% block content %}
+<div class="container">
+    <h1 class="page-title">Manage Clusters</h1>
+    <div style="margin-bottom: 1.5rem;">
+        <a href="{% url 'add_cluster' %}" class="btn btn-success">➕ Add New Cluster</a>
+    </div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Cluster Name</th>
+                    <th>Posts Count</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cluster in clusters %}
+                <tr>
+                    <td>{{ cluster.clusterid }}</td>
+                    <td>{{ cluster.clustername }}</td>
+                    <td>{{ cluster.post_count }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <a href="{% url 'edit_cluster' cluster.clusterid %}" class="btn btn-primary">Edit</a>
+                            <a href="{% url 'delete_cluster' cluster.clusterid %}" class="btn btn-danger">Delete</a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" style="text-align: center; color: #7f8c8d;">No clusters found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

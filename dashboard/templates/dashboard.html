@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Dashboard - Sentiment Analysis{% endblock %}
+{% block content %}
+<div class="main-container">
+    <h1 class="page-title">Dashboard Overview</h1>
+    
+    <div class="row g-4 mb-4">
+        <div class="col-md-4">
+            <div class="card-custom stat-card">
+                <div class="stat-label">Total Clusters</div>
+                <div class="stat-number">{{ clusters_count }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card-custom stat-card">
+                <div class="stat-label">Total Posts</div>
+                <div class="stat-number">{{ posts_count }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card-custom stat-card">
+                <div class="stat-label">Total Responses</div>
+                <div class="stat-number">{{ responses_count }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-custom">
+        <h2 class="mb-4">Posts Overview</h2>
+        <div class="table-responsive">
+            <table class="table table-hover table-custom">
+                <thead>
+                    <tr>
+                        <th>Post ID</th>
+                        <th>Cluster</th>
+                        <th>Message</th>
+                        <th>Responses</th>
+                        <th>Positive</th>
+                        <th>Negative</th>
+                        <th>Neutral</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in posts_data %}
+                    <tr>
+                        <td><strong>#{{ item.post.postid }}</strong></td>
+                        <td><span class="badge bg-info">{{ item.post.clusterid.clustername }}</span></td>
+                        <td>{{ item.post.postmessage|truncatewords:15 }}</td>
+                        <td class="text-center">{{ item.total_responses }}</td>
+                        <td class="text-center"><span class="text-success fw-bold">{{ item.positive_pct }}%</span></td>
+                        <td class="text-center"><span class="text-danger fw-bold">{{ item.negative_pct }}%</span></td>
+                        <td class="text-center"><span class="text-secondary fw-bold">{{ item.neutral_pct }}%</span></td>
+                        <td>
+                            <a href="{% url 'sentiment_analysis' %}?post={{ item.post.postid }}" class="btn btn-sm btn-primary-custom">View Details</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">No posts found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

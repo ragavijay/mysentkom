@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Demographic Analysis{% endblock %}
+{% block content %}
+<div class="container">
+    <h1 class="page-title">Demographic Analysis</h1>
+    <div class="chart-container">
+        {{ gender_chart|safe }}
+    </div>
+</div>
+{% endblock %}

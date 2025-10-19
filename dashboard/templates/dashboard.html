@@ -35,6 +35,7 @@
                         <th>Post ID</th>
                         <th>Cluster</th>
                         <th>Message</th>
+                        <th> Date </th>
                         <th>Responses</th>
                         <th>Positive</th>
                         <th>Negative</th>
@@ -48,6 +49,7 @@
                         <td><strong>#{{ item.post.postid }}</strong></td>
                         <td><span class="badge bg-info">{{ item.post.clusterid.clustername }}</span></td>
                         <td>{{ item.post.postmessage|truncatewords:15 }}</td>
+                        <td>{{ item.postdate|date:"Y-m-d" }}</td>
                         <td class="text-center">{{ item.total_responses }}</td>
                         <td class="text-center"><span class="text-success fw-bold">{{ item.positive_pct }}%</span></td>
                         <td class="text-center"><span class="text-danger fw-bold">{{ item.negative_pct }}%</span></td>

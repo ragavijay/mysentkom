@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Min, Max
 from django.contrib import messages
 from django.http import JsonResponse
 from django.template.loader import render_to_string
@@ -10,7 +10,7 @@ from django.core.paginator import Paginator
 import plotly.graph_objects as go
 from plotly.offline import plot
 
-from .models import Cluster, Post, Response, AgeGroup, AppUser
+from .models import Cluster, Post, Response, AgeGroup, AppUser, State
 
 
 def is_admin(user):
@@ -53,7 +53,7 @@ def user_logout(request):
 
 @login_required(login_url='login')
 def dashboard(request):
-    posts = Post.objects.select_related('clusterid').all()
+    posts = Post.objects.select_related('clusterid').all().order_by('-postdate')
     
     posts_data = []
     for post in posts:
@@ -73,6 +73,7 @@ def dashboard(request):
         
         posts_data.append({
             'post': post,
+            'postdate': post.postdate,
             'total_responses': total,
             'positive_pct': positive_pct,
             'negative_pct': negative_pct,
@@ -96,7 +97,9 @@ def sentiment_analysis(request):
     
     gender_filter = request.GET.get('gender', '')
     agegroup_filter = request.GET.get('agegroup', '')
-    location_filter = request.GET.get('location', '')
+    state_filter = request.GET.get('state', '')
+    date_from = request.GET.get('date_from', '')
+    date_to = request.GET.get('date_to', '')
     
     if not post_id:
         posts = Post.objects.select_related('clusterid').all()
@@ -108,19 +111,39 @@ def sentiment_analysis(request):
         return render(request, 'sentiment_analysis.html', context)
     
     selected_post = get_object_or_404(Post, postid=post_id)
-    responses = Response.objects.filter(postid=post_id).select_related('agegroupid')
+    responses = Response.objects.filter(postid=post_id).select_related('agegroupid', 'stateid', 'postid')
     
     if gender_filter:
         responses = responses.filter(gender=gender_filter)
     if agegroup_filter:
         responses = responses.filter(agegroupid__agegroupid=agegroup_filter)
-    if location_filter:
-        responses = responses.filter(location=location_filter)
+    if state_filter:
+        responses = responses.filter(stateid__stateid=state_filter)
+    if date_from:
+        responses = responses.filter(responsedate__gte=date_from)
+    if date_to:
+        responses = responses.filter(responsedate__lte=date_to)
     
     all_responses = Response.objects.filter(postid=post_id)
-    genders = all_responses.values_list('gender', flat=True).distinct().order_by('gender')
+    # Get min and max dates for the date range slider
+    date_range = all_responses.aggregate(
+        min_date=Min('responsedate'),
+        max_date=Max('responsedate')
+    )
+    min_date = date_range['min_date']
+    max_date = date_range['max_date']
+    
+    # Get distinct genders from responses
+    genders_list = all_responses.values_list('gender', flat=True).distinct().order_by('gender')
+    # Map gender codes to labels
+    gender_map = {'M': 'Male', 'F': 'Female', 'O': 'Others', 'N': 'Not Disclosed'}
+    genders = [(code, gender_map.get(code, code)) for code in genders_list]
+    
     age_groups = AgeGroup.objects.filter(response__postid=post_id).distinct().order_by('agegroupid')
-    locations = all_responses.values_list('location', flat=True).distinct().order_by('location')
+    # Changed: Get all states including NA (stateid >= 0)
+    states = State.objects.filter(
+        stateid__in=all_responses.values_list('stateid__stateid', flat=True).distinct()
+    ).order_by('stateid')
     
     sentiment_data = responses.values('sentiment').annotate(count=Count('responseid'))
     sentiments = {item['sentiment']: item['count'] for item in sentiment_data}
@@ -136,7 +159,7 @@ def sentiment_analysis(request):
     
     if is_ajax:
         if page_number:
-            responses_list = responses.order_by('-responseid')
+            responses_list = responses.order_by('-responsedate')
             paginator = Paginator(responses_list, 5)
             
             try:
@@ -161,7 +184,7 @@ def sentiment_analysis(request):
                 'total_responses': responses.count()
             })
     
-    responses_list = responses.order_by('-responseid')
+    responses_list = responses.order_by('-responsedate')
     paginator = Paginator(responses_list, 5)
     
     try:
@@ -185,10 +208,14 @@ def sentiment_analysis(request):
         'responses_page': responses_page,
         'genders': genders,
         'age_groups': age_groups,
-        'locations': locations,
+        'states': states,
         'gender_filter': gender_filter,
         'agegroup_filter': agegroup_filter,
-        'location_filter': location_filter,
+        'state_filter': state_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+        'min_date': min_date,
+        'max_date': max_date,
         'is_admin': is_admin(request.user),
     }
     return render(request, 'sentiment_analysis.html', context)
@@ -215,10 +242,12 @@ def cluster_analysis(request):
 def demographic_analysis(request):
     gender_sentiment = Response.objects.values('gender', 'sentiment').annotate(count=Count('responseid'))
     
-    genders = ['M', 'F', 'O']
-    positive = [0, 0, 0]
-    negative = [0, 0, 0]
-    neutral = [0, 0, 0]
+    # Updated gender list to include 'O' (Others) and 'N' (Not Disclosed)
+    genders = ['M', 'F', 'O', 'N']
+    gender_labels = ['Male', 'Female', 'Others', 'Not Disclosed']
+    positive = [0, 0, 0, 0]
+    negative = [0, 0, 0, 0]
+    neutral = [0, 0, 0, 0]
     
     for item in gender_sentiment:
         idx = genders.index(item['gender']) if item['gender'] in genders else -1
@@ -231,9 +260,9 @@ def demographic_analysis(request):
                 neutral[idx] = item['count']
     
     fig = go.Figure()
-    fig.add_trace(go.Bar(name='Positive', x=['Male', 'Female', 'Other'], y=positive, marker=dict(color='#2ecc71')))
-    fig.add_trace(go.Bar(name='Negative', x=['Male', 'Female', 'Other'], y=negative, marker=dict(color='#e74c3c')))
-    fig.add_trace(go.Bar(name='Neutral', x=['Male', 'Female', 'Other'], y=neutral, marker=dict(color='#95a5a6')))
+    fig.add_trace(go.Bar(name='Positive', x=gender_labels, y=positive, marker=dict(color='#2ecc71')))
+    fig.add_trace(go.Bar(name='Negative', x=gender_labels, y=negative, marker=dict(color='#e74c3c')))
+    fig.add_trace(go.Bar(name='Neutral', x=gender_labels, y=neutral, marker=dict(color='#95a5a6')))
     fig.update_layout(title='Sentiment by Gender', barmode='group', height=400)
     gender_chart = plot(fig, output_type='div', include_plotlyjs=False)
     
@@ -349,12 +378,15 @@ def add_post(request):
         cluster_id = request.POST.get('clusterid')
         postlink = request.POST.get('postlink')
         postmessage = request.POST.get('postmessage')
+        postdate = request.POST.get('postdate')  # New: Added postdate field
         
-        if cluster_id and postlink and postmessage:
+        if cluster_id and postlink and postmessage and postdate:
             cluster = get_object_or_404(Cluster, clusterid=cluster_id)
-            Post.objects.create(clusterid=cluster, postlink=postlink, postmessage=postmessage)
+            Post.objects.create(clusterid=cluster, postlink=postlink, postmessage=postmessage, postdate=postdate)
             messages.success(request, 'Post added successfully!')
             return redirect('manage_posts')
+        else:
+            messages.error(request, 'All fields are required!')
     
     clusters = Cluster.objects.all()
     context = {
@@ -376,15 +408,19 @@ def edit_post(request, post_id):
         cluster_id = request.POST.get('clusterid')
         postlink = request.POST.get('postlink')
         postmessage = request.POST.get('postmessage')
+        postdate = request.POST.get('postdate')  # New: Added postdate field
         
-        if cluster_id and postlink and postmessage:
+        if cluster_id and postlink and postmessage and postdate:
             cluster = get_object_or_404(Cluster, clusterid=cluster_id)
             post.clusterid = cluster
             post.postlink = postlink
             post.postmessage = postmessage
+            post.postdate = postdate
             post.save()
             messages.success(request, 'Post updated successfully!')
             return redirect('manage_posts')
+        else:
+            messages.error(request, 'All fields are required!')
     
     clusters = Cluster.objects.all()
     context = {

@@ -39,17 +39,15 @@
         
         <div class="row">
             <!-- Gender Slicer -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="slicer-group">
                     <label class="slicer-title" for="genderSelect">Gender</label>
                     <select id="genderSelect" class="slicer-select {% if gender_filter %}filtered{% endif %}" 
                             onchange="applyFilter('gender', this.value)">
                         <option value="">All</option>
-                        {% for gender in genders %}
-                        <option value="{{ gender }}" {% if gender_filter == gender %}selected{% endif %}>
-                            {% if gender == 'M' %}Male
-                            {% elif gender == 'F' %}Female
-                            {% else %}Other{% endif %}
+                        {% for code, label in genders %}
+                        <option value="{{ code }}" {% if gender_filter == code %}selected{% endif %}>
+                            {{ label }}
                         </option>
                         {% endfor %}
                     </select>
@@ -57,7 +55,7 @@
             </div>
 
             <!-- Age Group Slicer -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="slicer-group">
                     <label class="slicer-title" for="ageSelect">Age Group</label>
                     <select id="ageSelect" class="slicer-select {% if agegroup_filter %}filtered{% endif %}" 
@@ -72,30 +70,52 @@
                 </div>
             </div>
 
-            <!-- Location Slicer -->
-            <div class="col-md-4">
+            <!-- State Slicer -->
+            <div class="col-md-3">
                 <div class="slicer-group">
-                    <label class="slicer-title" for="locationSelect">Location</label>
-                    <select id="locationSelect" class="slicer-select {% if location_filter %}filtered{% endif %}" 
-                            onchange="applyFilter('location', this.value)">
+                    <label class="slicer-title" for="stateSelect">State</label>
+                    <select id="stateSelect" class="slicer-select {% if state_filter %}filtered{% endif %}" 
+                            onchange="applyFilter('state', this.value)">
                         <option value="">All</option>
-                        {% for location in locations %}
-                        <option value="{{ location }}" {% if location_filter == location %}selected{% endif %}>
-                            {{ location }}
+                        {% for state in states %}
+                        <option value="{{ state.stateid }}" {% if state_filter == state.stateid|stringformat:"s" %}selected{% endif %}>
+                            {{ state.statename }}
                         </option>
                         {% endfor %}
                     </select>
                 </div>
             </div>
+
+            <!-- Date Range Slider -->
+            <div class="col-md-3">
+                <div class="slicer-group">
+                    <label class="slicer-title">Date Range</label>
+                    <div class="date-range-slider">
+                        <input type="range" id="dateSliderFrom" class="slider" 
+                               min="0" max="100" value="0" step="1" oninput="updateDateSlider()">
+                        <input type="range" id="dateSliderTo" class="slider" 
+                               min="0" max="100" value="100" step="1" oninput="updateDateSlider()">
+                        <div class="slider-track"></div>
+                        <div class="slider-labels">
+                            <span id="sliderFromLabel" class="slider-label">{{ min_date|date:"d-m-Y" }}</span>
+                            <span id="sliderToLabel" class="slider-label">{{ max_date|date:"d-m-Y" }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Active Filters & Clear Button -->
-        {% if gender_filter or agegroup_filter or location_filter %}
+        {% if gender_filter or agegroup_filter or state_filter or date_from or date_to %}
         <div class="active-filters">
             <strong>Active Filters:</strong>
             {% if gender_filter %}
             <span class="filter-badge">
-                Gender: {% if gender_filter == 'M' %}Male{% elif gender_filter == 'F' %}Female{% else %}Other{% endif %}
+                Gender: 
+                {% if gender_filter == 'M' %}Male
+                {% elif gender_filter == 'F' %}Female
+                {% elif gender_filter == 'O' %}Others
+                {% elif gender_filter == 'N' %}Not Disclosed{% endif %}
             </span>
             {% endif %}
             {% if agegroup_filter %}
@@ -103,8 +123,15 @@
                 Age: {% for age in age_groups %}{% if age.agegroupid|stringformat:"s" == agegroup_filter %}{{ age.agegroup }}{% endif %}{% endfor %}
             </span>
             {% endif %}
-            {% if location_filter %}
-            <span class="filter-badge">Location: {{ location_filter }}</span>
+            {% if state_filter %}
+            <span class="filter-badge">
+                State: {% for state in states %}{% if state.stateid|stringformat:"s" == state_filter %}{{ state.statename }}{% endif %}{% endfor %}
+            </span>
+            {% endif %}
+            {% if date_from or date_to %}
+            <span class="filter-badge">
+                Date: {{ date_from|date:"Y-m-d" }} to {{ date_to|date:"Y-m-d" }}
+            </span>
             {% endif %}
             <button type="button" class="btn btn-sm clear-filters-btn" onclick="clearAllFilters()">Clear All Filters</button>
         </div>
@@ -134,13 +161,131 @@
 {% endblock %}
 
 {% block extra_js %}
+<style>
+.date-range-slider {
+    position: relative;
+    margin-top: 10px;
+}
+
+.slider {
+    position: absolute;
+    width: 100%;
+    height: 5px;
+    top: 50%;
+    left: 0;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background: none;
+    z-index: 5;
+}
+
+.slider::-webkit-slider-thumb {
+    pointer-events: auto;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+    border: 2px solid #2980b9;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.slider::-moz-range-thumb {
+    pointer-events: auto;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+    border: 2px solid #2980b9;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.slider-track {
+    width: 100%;
+    height: 5px;
+    background: #ecf0f1;
+    border-radius: 5px;
+    position: relative;
+    margin-top: 10px;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #7f8c8d;
+    font-weight: 500;
+}
+
+.slider-label {
+    background: #ecf0f1;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+</style>
+
 <script>
 const postId = '{{ selected_post_id }}';
+const minDateObj = new Date('{{ min_date|date:"Y-m-d" }}');
+const maxDateObj = new Date('{{ max_date|date:"Y-m-d" }}');
+const daysDiff = Math.ceil((maxDateObj - minDateObj) / (1000 * 60 * 60 * 24));
+
 let currentFilters = {
     gender: '{{ gender_filter }}',
     agegroup: '{{ agegroup_filter }}',
-    location: '{{ location_filter }}'
+    state: '{{ state_filter }}',
+    date_from: '{{ date_from }}',
+    date_to: '{{ date_to }}'
 };
+
+function dateToSliderValue(date) {
+    const dateObj = new Date(date);
+    const daysSinceMin = Math.ceil((dateObj - minDateObj) / (1000 * 60 * 60 * 24));
+    return Math.max(0, Math.min(100, (daysSinceMin / daysDiff) * 100));
+}
+
+function sliderValueToDate(value) {
+    const dayOffset = (value / 100) * daysDiff;
+    const resultDate = new Date(minDateObj);
+    resultDate.setDate(resultDate.getDate() + dayOffset);
+    return resultDate.toISOString().split('T')[0];
+}
+
+function formatDateDisplay(date) {
+    return new Date(date).toLocaleDateString('en-CA');
+}
+
+function updateDateSlider() {
+    const sliderFrom = document.getElementById('dateSliderFrom');
+    const sliderTo = document.getElementById('dateSliderTo');
+    
+    let valueFrom = parseFloat(sliderFrom.value);
+    let valueTo = parseFloat(sliderTo.value);
+    
+    if (valueFrom > valueTo) {
+        [valueFrom, valueTo] = [valueTo, valueFrom];
+        sliderFrom.value = valueFrom;
+        sliderTo.value = valueTo;
+    }
+    
+    const dateFrom = sliderValueToDate(valueFrom);
+    const dateTo = sliderValueToDate(valueTo);
+    
+    document.getElementById('sliderFromLabel').textContent = formatDateDisplay(dateFrom);
+    document.getElementById('sliderToLabel').textContent = formatDateDisplay(dateTo);
+    
+    currentFilters.date_from = dateFrom;
+    currentFilters.date_to = dateTo;
+    
+    updateChart();
+}
 
 function applyFilter(filterType, value) {
     currentFilters[filterType] = value;
@@ -148,11 +293,14 @@ function applyFilter(filterType, value) {
 }
 
 function clearAllFilters() {
-    currentFilters = { gender: '', agegroup: '', location: '' };
-    // Reset all dropdowns to "All"
+    currentFilters = { gender: '', agegroup: '', state: '', date_from: '', date_to: '' };
     document.getElementById('genderSelect').value = '';
     document.getElementById('ageSelect').value = '';
-    document.getElementById('locationSelect').value = '';
+    document.getElementById('stateSelect').value = '';
+    document.getElementById('dateSliderFrom').value = 0;
+    document.getElementById('dateSliderTo').value = 100;
+    document.getElementById('sliderFromLabel').textContent = formatDateDisplay(minDateObj.toISOString().split('T')[0]);
+    document.getElementById('sliderToLabel').textContent = formatDateDisplay(maxDateObj.toISOString().split('T')[0]);
     updateChart();
 }
 
@@ -160,19 +308,18 @@ function updateChart() {
     const chartContainer = document.getElementById('chartContainer');
     const responsesContainer = document.getElementById('responses-container');
     
-    // Show loading
     chartContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Updating chart...</p></div>';
     responsesContainer.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading responses...</p></div>';
     
-    // Build URL with filters
     const params = new URLSearchParams({
         post: postId,
         gender: currentFilters.gender,
         agegroup: currentFilters.agegroup,
-        location: currentFilters.location
+        state: currentFilters.state,
+        date_from: currentFilters.date_from,
+        date_to: currentFilters.date_to
     });
     
-    // Fetch updated chart
     fetch(`?${params.toString()}`, {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
     })
@@ -183,14 +330,11 @@ function updateChart() {
         return response.json();
     })
     .then(data => {
-        // Insert the chart HTML
         chartContainer.innerHTML = data.sentiment_chart;
         
-        // Update response counts
         document.getElementById('total-responses').textContent = data.total_responses;
         document.getElementById('response-count').textContent = data.total_responses;
         
-        // Find and execute the plotly script in the returned HTML
         const scriptMatch = data.sentiment_chart.match(/<script[^>]*>([\s\S]*?)<\/script>/);
         if (scriptMatch && scriptMatch[1]) {
             try {
@@ -200,14 +344,11 @@ function updateChart() {
             }
         }
         
-        // Update URL without reload
         const newUrl = `${window.location.pathname}?${params.toString()}`;
         window.history.pushState({}, '', newUrl);
         
-        // Update dropdown styling
         updateDropdownStyling();
         
-        // Load first page of responses
         loadPageWithoutScroll(1);
     })
     .catch(error => {
@@ -217,14 +358,13 @@ function updateChart() {
 }
 
 function updateDropdownStyling() {
-    // Add/remove 'filtered' class based on selection
     const genderSelect = document.getElementById('genderSelect');
     const ageSelect = document.getElementById('ageSelect');
-    const locationSelect = document.getElementById('locationSelect');
+    const stateSelect = document.getElementById('stateSelect');
     
     if (genderSelect) genderSelect.classList.toggle('filtered', genderSelect.value !== '');
     if (ageSelect) ageSelect.classList.toggle('filtered', ageSelect.value !== '');
-    if (locationSelect) locationSelect.classList.toggle('filtered', locationSelect.value !== '');
+    if (stateSelect) stateSelect.classList.toggle('filtered', stateSelect.value !== '');
 }
 
 function loadPageWithoutScroll(pageNum) {
@@ -234,7 +374,9 @@ function loadPageWithoutScroll(pageNum) {
         post: postId,
         gender: currentFilters.gender,
         agegroup: currentFilters.agegroup,
-        location: currentFilters.location,
+        state: currentFilters.state,
+        date_from: currentFilters.date_from,
+        date_to: currentFilters.date_to,
         page: pageNum
     });
     
@@ -262,7 +404,9 @@ function loadPage(pageNum) {
         post: postId,
         gender: currentFilters.gender,
         agegroup: currentFilters.agegroup,
-        location: currentFilters.location,
+        state: currentFilters.state,
+        date_from: currentFilters.date_from,
+        date_to: currentFilters.date_to,
         page: pageNum
     });
     
@@ -290,9 +434,18 @@ function attachPaginationListeners() {
     });
 }
 
+// Initialize slider on page load
 document.addEventListener('DOMContentLoaded', function() {
     attachPaginationListeners();
     updateDropdownStyling();
+    
+    // Set initial slider values if date filters were already applied
+    if (currentFilters.date_from) {
+        document.getElementById('dateSliderFrom').value = dateToSliderValue(currentFilters.date_from);
+    }
+    if (currentFilters.date_to) {
+        document.getElementById('dateSliderTo').value = dateToSliderValue(currentFilters.date_to);
+    }
 });
 </script>
 {% endblock %}

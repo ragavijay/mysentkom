@@ -1,24 +1,58 @@
 {% load static %}
 {% if responses_page %}
-<div>
-    {% for response in responses_page %}
-    <div class="response-card response-card-{% if response.sentiment == 'P' %}positive{% elif response.sentiment == 'N' %}negative{% else %}neutral{% endif %}">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
-            <div>
-                <strong class="text-dark">{{ response.username }}</strong>
-                <span class="text-muted small ms-2">
-                    {% if response.agegroupid %}{{ response.agegroupid.agegroup }}{% endif %} | 
-                    {% if response.gender == 'M' %}Male{% elif response.gender == 'F' %}Female{% else %}Other{% endif %} | 
-                    {{ response.location }}
-                </span>
-            </div>
-            <span class="sentiment-badge sentiment-{% if response.sentiment == 'P' %}positive{% elif response.sentiment == 'N' %}negative{% else %}neutral{% endif %}">
-                {% if response.sentiment == 'P' %}Positive{% elif response.sentiment == 'N' %}Negative{% else %}Neutral{% endif %}
-            </span>
-        </div>
-        <p class="mb-0">{{ response.responsemessage }}</p>
-    </div>
-    {% endfor %}
+<div class="table-responsive">
+    <table class="table table-hover table-custom">
+        <thead>
+            <tr>
+                <th>Serial No.</th>
+                <th>Date</th>
+                <th>Username</th>
+                <th>Gender</th>
+                <th>Age Group</th>
+                <th>State</th>
+                <th>Message</th>
+                <th>Sentiment</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for response in responses_page %}
+            <tr>
+                <td>
+                    <strong>{{ responses_page.start_index|add:forloop.counter0 }}</strong>
+                </td>
+                <td>
+                    <span class="text-muted">{{ response.responsedate|date:"d-m-Y" }}</span>
+                </td>
+                <td>
+                    <strong>{{ response.username }}</strong>
+                </td>
+                <td>
+                    {% if response.gender == 'M' %}Male
+                    {% elif response.gender == 'F' %}Female
+                    {% elif response.gender == 'O' %}Others
+                    {% elif response.gender == 'N' %}Not Disclosed
+                    {% else %}{{ response.gender }}{% endif %}
+                </td>
+                <td>
+                    {% if response.agegroupid %}{{ response.agegroupid.agegroup }}{% else %}-{% endif %}
+                </td>
+                <td>
+                    {% if response.stateid %}{{ response.stateid.statename }}{% else %}-{% endif %}
+                </td>
+                <td>
+                    {{ response.responsemessage|truncatewords:20 }}
+                </td>
+                <td>
+                    <span class="sentiment-badge sentiment-{% if response.sentiment == 'P' %}positive{% elif response.sentiment == 'N' %}negative{% else %}neutral{% endif %}">
+                        {% if response.sentiment == 'P' %}Positive
+                        {% elif response.sentiment == 'N' %}Negative
+                        {% else %}Neutral{% endif %}
+                    </span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>
 
 {% if responses_page.paginator.num_pages > 1 %}
@@ -31,7 +65,6 @@
             <li><span class="page-link-custom disabled">First</span></li>
             <li><span class="page-link-custom disabled">Previous</span></li>
         {% endif %}
-
         {% for num in responses_page.paginator.page_range %}
             {% if num == responses_page.number %}
                 <li><span class="page-link-custom active">{{ num }}</span></li>
@@ -39,7 +72,6 @@
                 <li><span class="page-link-custom" data-page="{{ num }}">{{ num }}</span></li>
             {% endif %}
         {% endfor %}
-
         {% if responses_page.has_next %}
             <li><span class="page-link-custom" data-page="{{ responses_page.next_page_number }}">Next</span></li>
             <li><span class="page-link-custom" data-page="{{ responses_page.paginator.num_pages }}">Last</span></li>
@@ -50,7 +82,6 @@
     </ul>
 </nav>
 {% endif %}
-
 {% else %}
 <p class="text-center text-muted py-4">No responses found for this post.</p>
 {% endif %}

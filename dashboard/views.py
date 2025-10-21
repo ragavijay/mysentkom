@@ -350,7 +350,7 @@ def demographic_analysis(request):
                 s['state'] = name_map[s['state']]
 
         # Load GeoJSON for Malaysian states
-        geojson_url = "https://raw.githubusercontent.com/ragavijay/mysentkom/main/dashboard/static/data/malaysia.geojson"
+        geojson_url = "https://raw.githubusercontent.com/ragavijay/mysentkom/main/static/geojson/malaysia_states.geojson.geojson"
         response = requests.get(geojson_url)
         print(response.status_code)
         print(response.text[:500])

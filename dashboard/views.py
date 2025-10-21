@@ -353,7 +353,7 @@ def demographic_analysis(request):
         geojson_url = "https://raw.githubusercontent.com/ragavijay/mysentkom/main/static/geojson/malaysia_states.geojson.geojson"
         response = requests.get(geojson_url)
         print(response.status_code)
-        print(response.text[:500])
+        #print(response.text[:500])
         malaysia_geojson = response.json()
 
         # Convert to DataFrame for Plotly Express
@@ -382,7 +382,7 @@ def demographic_analysis(request):
             title="Response Distribution by Malaysian States"
         )
 
-        map_chart = plot(fig_map, output_type='div', include_plotlyjs=False)
+        map_chart = plot(fig_map, output_type='div', include_plotlyjs=True)
     else:
         map_chart = None
 

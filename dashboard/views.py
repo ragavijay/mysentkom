@@ -9,7 +9,10 @@ from django.template.loader import render_to_string
 from django.core.paginator import Paginator
 import plotly.graph_objects as go
 from plotly.offline import plot
-
+import plotly.express as px
+import pandas as pd
+import requests
+import json
 from .models import Cluster, Post, Response, AgeGroup, AppUser, State
 
 
@@ -240,15 +243,52 @@ def cluster_analysis(request):
 
 @login_required(login_url='login')
 def demographic_analysis(request):
-    gender_sentiment = Response.objects.values('gender', 'sentiment').annotate(count=Count('responseid'))
-    
-    # Updated gender list to include 'O' (Others) and 'N' (Not Disclosed)
+    post_id = request.GET.get('post', None)
+    posts = Post.objects.select_related('clusterid').all()
+
+    if not post_id:
+        context = {
+            'posts': posts,
+            'selected_post': None,
+            'is_admin': is_admin(request.user),
+        }
+        return render(request, 'demographic_analysis.html', context)
+
+    selected_post = get_object_or_404(Post, postid=post_id)
+    responses = Response.objects.filter(postid=post_id)
+
+    # ---------- State-wise sentiment distribution ----------
+    state_data = []
+    states = State.objects.filter(stateid__gt=0).order_by('statename')
+
+    for state in states:
+        state_responses = responses.filter(stateid=state)
+        total = state_responses.count()
+
+        if total > 0:
+            positive = state_responses.filter(sentiment='P').count()
+            negative = state_responses.filter(sentiment='N').count()
+            neutral = state_responses.filter(sentiment='U').count()
+
+            state_data.append({
+                'state': state.statename,
+                'total': total,
+                'positive': positive,
+                'negative': negative,
+                'neutral': neutral,
+                'positive_pct': round((positive / total) * 100, 1),
+                'negative_pct': round((negative / total) * 100, 1),
+                'neutral_pct': round((neutral / total) * 100, 1),
+            })
+
+    # ---------- Gender distribution ----------
+    gender_sentiment = responses.values('gender', 'sentiment').annotate(count=Count('responseid'))
     genders = ['M', 'F', 'O', 'N']
     gender_labels = ['Male', 'Female', 'Others', 'Not Disclosed']
     positive = [0, 0, 0, 0]
     negative = [0, 0, 0, 0]
     neutral = [0, 0, 0, 0]
-    
+
     for item in gender_sentiment:
         idx = genders.index(item['gender']) if item['gender'] in genders else -1
         if idx >= 0:
@@ -258,18 +298,106 @@ def demographic_analysis(request):
                 negative[idx] = item['count']
             elif item['sentiment'] == 'U':
                 neutral[idx] = item['count']
-    
+
     fig = go.Figure()
     fig.add_trace(go.Bar(name='Positive', x=gender_labels, y=positive, marker=dict(color='#2ecc71')))
     fig.add_trace(go.Bar(name='Negative', x=gender_labels, y=negative, marker=dict(color='#e74c3c')))
     fig.add_trace(go.Bar(name='Neutral', x=gender_labels, y=neutral, marker=dict(color='#95a5a6')))
     fig.update_layout(title='Sentiment by Gender', barmode='group', height=400)
     gender_chart = plot(fig, output_type='div', include_plotlyjs=False)
-    
+
+    # ---------- Age group distribution ----------
+    age_sentiment = responses.exclude(agegroupid__agegroupid=0).values(
+        'agegroupid__agegroup', 'sentiment'
+    ).annotate(count=Count('responseid'))
+
+    age_groups_list = AgeGroup.objects.filter(agegroupid__gt=0).order_by('agegroupid')
+    age_labels = [ag.agegroup for ag in age_groups_list]
+    age_positive = [0] * len(age_labels)
+    age_negative = [0] * len(age_labels)
+    age_neutral = [0] * len(age_labels)
+
+    for item in age_sentiment:
+        try:
+            idx = age_labels.index(item['agegroupid__agegroup'])
+            if item['sentiment'] == 'P':
+                age_positive[idx] = item['count']
+            elif item['sentiment'] == 'N':
+                age_negative[idx] = item['count']
+            elif item['sentiment'] == 'U':
+                age_neutral[idx] = item['count']
+        except ValueError:
+            pass
+
+    age_fig = go.Figure()
+    age_fig.add_trace(go.Bar(name='Positive', x=age_labels, y=age_positive, marker=dict(color='#2ecc71')))
+    age_fig.add_trace(go.Bar(name='Negative', x=age_labels, y=age_negative, marker=dict(color='#e74c3c')))
+    age_fig.add_trace(go.Bar(name='Neutral', x=age_labels, y=age_neutral, marker=dict(color='#95a5a6')))
+    age_fig.update_layout(title='Sentiment by Age Group', barmode='group', height=400)
+    age_chart = plot(age_fig, output_type='div', include_plotlyjs=False)
+
+    # ---------- Malaysia State Map ----------
+    if state_data:
+        # Normalize names to match GeoJSON
+        name_map = {
+            "Penang": "Pulau Pinang",
+            "WP Kuala Lumpur": "Kuala Lumpur",
+            "WP Labuan": "Labuan",
+            "WP Putrajaya": "Putrajaya",
+        }
+        for s in state_data:
+            if s['state'] in name_map:
+                s['state'] = name_map[s['state']]
+
+        # Load GeoJSON for Malaysian states
+        geojson_url = "https://raw.githubusercontent.com/ragavijay/mysentkom/main/dashboard/static/data/malaysia.geojson"
+        response = requests.get(geojson_url)
+        print(response.status_code)
+        print(response.text[:500])
+        malaysia_geojson = response.json()
+
+        # Convert to DataFrame for Plotly Express
+        df = pd.DataFrame(state_data)
+
+        fig_map = px.choropleth_mapbox(
+            df,
+            geojson=malaysia_geojson,
+            locations='state',
+            color='total',
+            featureidkey="properties.name",
+            hover_name='state',
+            hover_data={
+                'total': True,
+                'positive': True,
+                'negative': True,
+                'neutral': True,
+                'positive_pct': True,
+                'negative_pct': True,
+                'neutral_pct': True,
+            },
+            color_continuous_scale="Viridis",
+            mapbox_style="carto-positron",
+            center={"lat": 4.2105, "lon": 101.9758},
+            zoom=4.3,
+            title="Response Distribution by Malaysian States"
+        )
+
+        map_chart = plot(fig_map, output_type='div', include_plotlyjs=False)
+    else:
+        map_chart = None
+
+    # ---------- Final context ----------
     context = {
+        'posts': posts,
+        'selected_post': selected_post,
+        'selected_post_id': post_id,
+        'state_data': state_data,
+        'map_chart': map_chart,
         'gender_chart': gender_chart,
+        'age_chart': age_chart,
         'is_admin': is_admin(request.user),
     }
+
     return render(request, 'demographic_analysis.html', context)
 
 

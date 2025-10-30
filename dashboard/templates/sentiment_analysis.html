@@ -91,12 +91,14 @@
                 <div class="slicer-group">
                     <label class="slicer-title">Date Range</label>
                     <div class="date-range-slider">
-                        <input type="range" id="dateSliderFrom" class="slider" 
-                               min="0" max="100" value="0" step="1" oninput="updateDateSlider()">
-                        <input type="range" id="dateSliderTo" class="slider" 
-                               min="0" max="100" value="100" step="1" oninput="updateDateSlider()">
-                        <div class="slider-track"></div>
-                        <div class="slider-labels">
+                        <div class="slider-container" style="position: relative; height: 20px; margin-bottom: 30px;">
+                            <input type="range" id="dateSliderFrom" class="slider" 
+                                   min="0" max="100" value="0" step="1" oninput="updateDateSlider()">
+                            <input type="range" id="dateSliderTo" class="slider" 
+                                   min="0" max="100" value="100" step="1" oninput="updateDateSlider()">
+                            <div class="slider-track"></div>
+                        </div>
+                        <div class="slider-labels" style="display: flex; justify-content: space-between;">
                             <span id="sliderFromLabel" class="slider-label">{{ min_date|date:"d-m-Y" }}</span>
                             <span id="sliderToLabel" class="slider-label">{{ max_date|date:"d-m-Y" }}</span>
                         </div>
